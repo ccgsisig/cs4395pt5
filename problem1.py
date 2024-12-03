@@ -143,7 +143,12 @@ class PositionalEncoding(nn.Module):
         # - Compute the positional encodings using sine and cosine functions.
         # - Register 'pe' as a buffer.
 
-        # Your code here
+        pe = torch.zeros(max_len, embedding_dim)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, embedding_dim, 2).float() * (-torch.log(torch.tensor(10000.0)) / embedding_dim))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe.unsqueeze(0))
         pass
 
     def forward(self, x):
@@ -151,7 +156,7 @@ class PositionalEncoding(nn.Module):
         # - Add positional encoding to the input embeddings 'x'.
         # - Ensure the positional encoding is added correctly considering the sequence length.
 
-        # Your code here
+        return x + self.pe[:, :x.size(1)]
         pass
 
 # Multi-Head Self-Attention Layer
@@ -163,7 +168,15 @@ class MultiHeadSelfAttention(nn.Module):
         # - Define linear layers for query, key, and value projections.
         # - Define a linear layer for the output.
 
-        # Your code here
+        assert embedding_dim % num_heads == 0, "Embedding dimension must be divisible by number of heads"
+        self.num_heads = num_heads
+        self.head_dim = embedding_dim // num_heads
+
+        self.query = nn.Linear(embedding_dim, embedding_dim)
+        self.key = nn.Linear(embedding_dim, embedding_dim)
+        self.value = nn.Linear(embedding_dim, embedding_dim)
+        self.fc = nn.Linear(embedding_dim, embedding_dim)
+        self.scale = torch.sqrt(torch.tensor(self.head_dim, dtype=torch.float))
         pass
 
     def forward(self, x):
@@ -174,7 +187,26 @@ class MultiHeadSelfAttention(nn.Module):
         # - Concatenate the attention outputs from all heads.
         # - Apply the final linear layer.
 
-        # Your code here
+        batch_size = x.size(0)
+
+        # Linear projections
+        Q = self.query(x)  # (batch_size, seq_len, embedding_dim)
+        K = self.key(x)
+        V = self.value(x)
+
+        # Reshape for multiple heads
+        Q = Q.view(batch_size, -1, self.num_heads, self.head_dim).transpose(1, 2)
+        K = K.view(batch_size, -1, self.num_heads, self.head_dim).transpose(1, 2)
+        V = V.view(batch_size, -1, self.num_heads, self.head_dim).transpose(1, 2)
+
+        # Scaled dot-product attention
+        scores = torch.matmul(Q, K.transpose(-2, -1)) / self.scale
+        attention = torch.softmax(scores, dim=-1)
+        context = torch.matmul(attention, V)
+
+        # Concatenate heads and apply the final linear layer
+        context = context.transpose(1, 2).contiguous().view(batch_size, -1, self.num_heads * self.head_dim)
+        return self.fc(context)
         pass
 
 # Position-wise Feedforward Network
@@ -184,7 +216,8 @@ class PositionwiseFeedForward(nn.Module):
         # Instructions:
         # - Define two linear layers with a ReLU activation in between.
 
-        # Your code here
+        self.fc1 = nn.Linear(embedding_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, embedding_dim)
         pass
 
     def forward(self, x):
@@ -192,7 +225,7 @@ class PositionwiseFeedForward(nn.Module):
         # - Apply the first linear layer, followed by ReLU activation.
         # - Apply the second linear layer.
 
-        # Your code here
+        return self.fc2(F.relu(self.fc1(x)))
         pass
 
 # Transformer Encoder Layer
@@ -204,14 +237,26 @@ class TransformerEncoderLayer(nn.Module):
         # - Initialize the position-wise feedforward network.
         # - Define layer normalization and dropout layers as needed.
 
-        # Your code here
+        self.self_attention = MultiHeadSelfAttention(embedding_dim, num_heads)
+        self.feed_forward = PositionwiseFeedForward(embedding_dim, hidden_dim)
+        self.norm1 = nn.LayerNorm(embedding_dim)
+        self.norm2 = nn.LayerNorm(embedding_dim)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         # Instructions:
         # - Apply self-attention with residual connection and layer normalization.
         # - Apply feedforward network with residual connection and layer normalization.
 
-        # Your code here
+        # Self-attention with residual connection and normalization
+        attention_output = self.self_attention(x)
+        x = self.norm1(x + self.dropout(attention_output))
+
+        # Feedforward with residual connection and normalization
+        ff_output = self.feed_forward(x)
+        x = self.norm2(x + self.dropout(ff_output))
+
+        return x
         pass
 
 # Transformer Encoder
@@ -221,13 +266,17 @@ class TransformerEncoder(nn.Module):
         # Instructions:
         # - Create a list of TransformerEncoderLayer instances use nn.ModuleList().
 
-        # Your code here
+        self.layers = nn.ModuleList(
+            [TransformerEncoderLayer(embedding_dim, num_heads, hidden_dim, dropout) for _ in range(num_layers)]
+        )
 
     def forward(self, x):
         # Instructions:
         # - Pass the input through each layer in the encoder.
 
-        # Your code here
+        for layer in self.layers:
+            x = layer(x)
+        return x
         pass
 
 # Define the Transformer-based classifier
