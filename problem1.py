@@ -228,15 +228,10 @@ class PositionwiseFeedForward(nn.Module):
         return self.fc2(F.relu(self.fc1(x)))
         pass
 
-# Transformer Encoder Layer
+# Define Transformer Encoder Layer
 class TransformerEncoderLayer(nn.Module):
-    def __init__(self, embedding_dim, num_heads, hidden_dim):
+    def __init__(self, embedding_dim, num_heads, hidden_dim, dropout=0.1):
         super(TransformerEncoderLayer, self).__init__()
-        # Instructions:
-        # - Initialize the multi-head self-attention layer.
-        # - Initialize the position-wise feedforward network.
-        # - Define layer normalization and dropout layers as needed.
-
         self.self_attention = MultiHeadSelfAttention(embedding_dim, num_heads)
         self.feed_forward = PositionwiseFeedForward(embedding_dim, hidden_dim)
         self.norm1 = nn.LayerNorm(embedding_dim)
@@ -244,10 +239,6 @@ class TransformerEncoderLayer(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        # Instructions:
-        # - Apply self-attention with residual connection and layer normalization.
-        # - Apply feedforward network with residual connection and layer normalization.
-
         # Self-attention with residual connection and normalization
         attention_output = self.self_attention(x)
         x = self.norm1(x + self.dropout(attention_output))
@@ -257,35 +248,27 @@ class TransformerEncoderLayer(nn.Module):
         x = self.norm2(x + self.dropout(ff_output))
 
         return x
-        pass
 
-# Transformer Encoder
+# Define Transformer Encoder
 class TransformerEncoder(nn.Module):
-    def __init__(self, embedding_dim, num_heads, hidden_dim, num_layers):
+    def __init__(self, embedding_dim, num_heads, hidden_dim, num_layers, dropout=0.1):
         super(TransformerEncoder, self).__init__()
-        # Instructions:
-        # - Create a list of TransformerEncoderLayer instances use nn.ModuleList().
-
         self.layers = nn.ModuleList(
             [TransformerEncoderLayer(embedding_dim, num_heads, hidden_dim, dropout) for _ in range(num_layers)]
         )
 
     def forward(self, x):
-        # Instructions:
-        # - Pass the input through each layer in the encoder.
-
         for layer in self.layers:
             x = layer(x)
         return x
-        pass
 
-# Define the Transformer-based classifier
+# Define Transformer Classifier
 class TransformerClassifier(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=128, num_heads=8, num_layers=2, num_classes=1, hidden_dim=512, max_seq_length=50):
+    def __init__(self, vocab_size, embedding_dim=128, num_heads=8, num_layers=2, num_classes=1, hidden_dim=512, max_seq_length=50, dropout=0.1):
         super(TransformerClassifier, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=word_to_idx['<PAD>'])
         self.pos_encoder = PositionalEncoding(embedding_dim, max_len=max_seq_length)
-        self.transformer_encoder = TransformerEncoder(embedding_dim, num_heads, hidden_dim, num_layers)
+        self.transformer_encoder = TransformerEncoder(embedding_dim, num_heads, hidden_dim, num_layers, dropout)
         self.fc = nn.Linear(embedding_dim, num_classes)
         self.sigmoid = nn.Sigmoid()
         self.embedding_dim = embedding_dim
